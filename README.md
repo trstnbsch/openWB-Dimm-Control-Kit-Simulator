@@ -4,8 +4,6 @@ Dieses Projekt simuliert ein **openWB Dimm- & Control-Kit** auf einem Raspberry 
 
 Der Simulator emuliert die Hardware-Schnittstellen so exakt, dass der openWB-Core (Software 2.x) ihn als originales Hardware-Modul erkennt.
 
-[Image of an MQTT publish subscribe architecture]
-
 ## 🌟 Features
 
 * **Vollständige Emulation:** Antwortet auf Telnet-Anfragen (Port 8898) und Modbus-Abfragen (Port 8899).
