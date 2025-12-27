@@ -2,7 +2,7 @@
 
 Dieses Projekt simuliert ein **openWB Dimm- & Control-Kit** auf einem Raspberry Pi oder Ubuntu-Server. Es ermöglicht die Steuerung der Ladeleistung (Dimmung gemäß §14a EnWG) über MQTT-Signale. 
 
-Der Simulator emuliert die Hardware-Schnittstellen so exakt, dass der openWB-Core (Software 2.x) ihn als originales Hardware-Modul erkennt.
+Der Simulator emuliert die Hardware-Schnittstellen so exakt, dass die openWB (Software 2.x) ihn als originales Hardware-Modul erkennt.
 
 Der Schaltzustand der Steuerbox kann (bspw. per Shelly) per MQTT veröffentlicht werden.
 
