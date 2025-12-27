@@ -6,6 +6,15 @@ Der Simulator emuliert die Hardware-Schnittstellen so exakt, dass der openWB-Cor
 
 Der Schaltzustand der Steuerbox kann (bspw. per Shelly) per MQTT veröffentlicht werden.
 
+
+## Schema
+
+![Systemübersicht DuCK Simulator](duck_schema.png)
+
+
+
+
+
 ## 🌟 Features
 
 * **Vollständige Emulation:** Antwortet auf Telnet-Anfragen (Port 8898) und Modbus-Abfragen (Port 8899).
