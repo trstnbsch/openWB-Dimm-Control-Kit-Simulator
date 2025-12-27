@@ -22,12 +22,13 @@ Der Schaltzustand der Steuerbox kann (bspw. per Shelly) per MQTT veröffentlicht
 ```bash
 sudo apt update
 sudo apt install python3-flask python3-paho-mqtt python3-pymodbus -y
-
+```
 
 ### 2. Service einrichten
 
 ```bash
 sudo nano /etc/systemd/system/openwb-dimmControllKit.service
+```
 
 ```bash
 [Unit]
@@ -50,3 +51,4 @@ StandardError=inherit
 [Install]
 # Der Dienst soll im normalen Mehrbenutzermodus starten
 WantedBy=multi-user.target
+```
