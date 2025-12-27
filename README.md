@@ -48,7 +48,7 @@ Wants=network-online.target
 
 [Service]
 # -u sorgt dafür, dass die Logs sofort (unbuffered) im System-Log erscheinen
-ExecStart=/usr/bin/python3 -u /usr/local/bin/energie/DuCK.py
+ExecStart=/usr/bin/python3 -u /usr/local/bin/DuCK.py
 WorkingDirectory=/usr/local/bin
 # Bei einem Absturz nach 5 Sekunden neu starten
 Restart=always
