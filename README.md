@@ -18,6 +18,7 @@ Der Schaltzustand der Steuerbox kann (bspw. per Shelly) per MQTT veröffentlicht
 ## 🌟 Features
 
 * **Vollständige Emulation:** Antwortet auf Telnet-Anfragen (Port 8898) und Modbus-Abfragen (Port 8899).
+* **Watchdog:** nach 60 Sekunden ohne Signal wird gedimmt
 * **MQTT-Bridge:** Übersetzt frei definierbare MQTT-Topics in digitale Modbus-Eingänge (DI1-DI8). Payload on, 1, true, yes oder off, 0, false, no.
 * **Web-Interface:** Integrierte Weboberfläche (Port 5555) zur Konfiguration von MQTT-Broker und Topic-Mappings im laufenden Betrieb.
 * **Persistenz:** Einstellungen werden in einer `DuCK_config.json` gespeichert und bleiben nach Neustarts erhalten.
