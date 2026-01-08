@@ -21,6 +21,11 @@ DEFAULT_CONFIG = {
     }
 }
 
+# Speichert den letzten Kontakt pro Topic: {"topic/abc": 1700000000.0}
+last_contact_map = {}
+# Sperre für Thread-Sicherheit beim Zugriff auf die Map
+map_lock = threading.Lock()
+
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f:
@@ -30,8 +35,6 @@ def load_config():
 def save_config(config):
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=4)
-
-config = load_config()
 
 # ================== LOGGING & MODBUS SETUP ==================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -46,33 +49,46 @@ store = ModbusSlaveContext(
     hr=ModbusSequentialDataBlock(0, [0] * 1000),
     ir=ModbusSequentialDataBlock(0, [0] * 1000)
 )
-store.setValues(3, 100, [2])
+store.setValues(3, 100, [2]) # openWB Erkennung
 modbus_context = ModbusServerContext(slaves=store, single=True)
 
 # ================== MQTT CLIENT LOGIK ==================
 mqtt_inst = None
 
 def on_message(client, userdata, msg):
+    global last_contact_map
     try:
         topic = msg.topic
         payload = msg.payload.decode().strip().lower()
         value = 1 if payload in ("on", "1", "true", "yes") else 0
         
+        # Zeitstempel für dieses spezifische Topic aktualisieren
+        with map_lock:
+            last_contact_map[topic] = time.time()
+        
         current_config = load_config()
         if topic in current_config["TOPIC_MAP"]:
             di_index = current_config["TOPIC_MAP"][topic]
             store.setValues(1, di_index, [value])
-            log.info(f"MQTT: {topic} -> DI{di_index+1} ist {value}")
+            log.info(f"MQTT: {topic} empfangen -> Wert {value}")
     except Exception as e:
-        log.error(f"MQTT Fehler: {e}")
+        log.error(f"MQTT Fehler bei Nachricht: {e}")
 
 def mqtt_thread_func():
-    global mqtt_inst
+    global mqtt_inst, last_contact_map
     while True:
         try:
             current_config = load_config()
-            log.info(f"MQTT: Verbinde zu {current_config['MQTT_BROKER']}...")
-            
+            if not current_config['MQTT_BROKER']:
+                time.sleep(10)
+                continue
+
+            # Map initialisieren (alle bekannten Topics auf "jetzt" setzen beim Start)
+            with map_lock:
+                for t in current_config["TOPIC_MAP"].keys():
+                    if t not in last_contact_map:
+                        last_contact_map[t] = time.time()
+
             client_id = f"openwb-sim-{int(time.time())}"
             try:
                 mqtt_inst = mqtt_client.Client(mqtt_client.CallbackAPIVersion.VERSION1, client_id)
@@ -92,6 +108,27 @@ def mqtt_thread_func():
             log.error(f"MQTT Fehler: {e}. Neustart in 10s...")
             time.sleep(10)
 
+# ================== WATCHDOG LOGIK (PRO TOPIC) ==================
+def watchdog_thread_func():
+    """Prüft für jedes Topic einzeln, ob das 60s Timeout überschritten wurde"""
+    while True:
+        time.sleep(5)
+        now = time.time()
+        current_config = load_config()
+        
+        with map_lock:
+            for topic, di_index in current_config["TOPIC_MAP"].items():
+                # Wann kam die letzte Info für DIESES Topic?
+                last_t = last_contact_map.get(topic, 0) 
+                
+                if now - last_t > 60:
+                    # Timeout für dieses spezifische Topic!
+                    # Wir setzen nur diesen einen DI auf 1
+                    current_val = store.getValues(1, di_index, count=1)[0]
+                    if current_val == 0:
+                        log.warning(f"WATCHDOG: Topic '{topic}' (DI{di_index+1}) seit >60s stumm. Setze auf ON.")
+                        store.setValues(1, di_index, [1])
+
 # ================== TELNET SIMULATOR ==================
 def telnet_simulator():
     try:
@@ -104,39 +141,35 @@ def telnet_simulator():
             client_sock.sendall(b"\r\nopenWB DimmModul")
             time.sleep(0.5)
             client_sock.close()
-    except Exception as e:
-        log.error(f"Telnet Fehler: {e}")
+    except: pass
 
-# ================== WEB SERVER (FLASK) ==================
+# ================== WEB SERVER ==================
 app = Flask(__name__)
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
-<head><title>openWB Dimm- und Control-Kit Simulator Config</title>
+<head><title>openWB Dimm- Simulator</title>
 <style>
     body { font-family: sans-serif; margin: 40px; background: #f4f4f4; }
     .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     input { width: 100%; padding: 8px; margin: 10px 0; box-sizing: border-box; }
     button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
-    label { font-weight: bold; }
 </style>
 </head>
 <body>
     <div class="card">
-        <h1>openWB Dimm- und Control-Kit Simulator Einstellungen</h1>
+        <h1>openWB Dimm- Simulator</h1>
         <form method="POST">
             <h3>MQTT Broker</h3>
             <label>IP Adresse:</label><input type="text" name="broker" value="{{config.MQTT_BROKER}}">
             <label>User:</label><input type="text" name="user" value="{{config.MQTT_USER}}">
             <label>Passwort:</label><input type="password" name="pass" value="{{config.MQTT_PASSWORD}}">
-            
             <h3>Topic Mapping (DI1 - DI8)</h3>
             {% for i in range(8) %}
             <label>DI{{i+1}} Topic:</label>
             <input type="text" name="topic_{{i}}" value="{{topics[i]}}">
             {% endfor %}
-            
             <button type="submit">Speichern & Neustart</button>
         </form>
     </div>
@@ -146,10 +179,8 @@ HTML_TEMPLATE = """
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    global mqtt_inst
+    global mqtt_inst, last_contact_map
     current_config = load_config()
-    
-    # Topic Map umdrehen für einfache Anzeige im Formular
     topics = [""] * 8
     for t, idx in current_config["TOPIC_MAP"].items():
         if idx < 8: topics[idx] = t
@@ -158,34 +189,27 @@ def index():
         current_config["MQTT_BROKER"] = request.form.get("broker")
         current_config["MQTT_USER"] = request.form.get("user")
         current_config["MQTT_PASSWORD"] = request.form.get("pass")
-        
         new_topics = {}
         for i in range(8):
             t = request.form.get(f"topic_{i}")
             if t: new_topics[t] = i
         current_config["TOPIC_MAP"] = new_topics
-        
         save_config(current_config)
         
-        # MQTT Client stoppen, damit der Thread ihn neu startet
+        with map_lock:
+            last_contact_map = {} # Timings zurücksetzen bei Konfig-Änderung
         if mqtt_inst:
             mqtt_inst.disconnect()
-            
         return redirect("/")
-
     return render_template_string(HTML_TEMPLATE, config=current_config, topics=topics)
 
-def run_webserver():
-    app.run(host="0.0.0.0", port=5555)
-
-# ================== START ==================
 if __name__ == "__main__":
     threading.Thread(target=mqtt_thread_func, daemon=True).start()
+    threading.Thread(target=watchdog_thread_func, daemon=True).start()
     threading.Thread(target=telnet_simulator, daemon=True).start()
-    threading.Thread(target=run_webserver, daemon=True).start()
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=5555, debug=False, use_reloader=False), daemon=True).start()
 
-    log.info(f"Dienste gestartet. Web-Konfig auf http://[IP]:5555")
-    
+    log.info(f"Dienste gestartet.")
     try:
         StartTcpServer(context=modbus_context, address=("0.0.0.0", MODBUS_PORT), ignore_missing_slaves=True)
     except Exception as e:
