@@ -60,9 +60,14 @@ StandardError=inherit
 ```
 
 ```bash
+#neu laden
 sudo systemctl daemon-reload
+#Service aktivieren
 sudo systemctl enable openwb-dimmControllKit.service
+#Service starten
 sudo systemctl start openwb-dimmControllKit.service
+#Status ausgeben
 sudo systemctl status openwb-dimmControllKit.service
+#print()-Ausgaben anzeigen
 journalctl -u openwb-dimmControllKit.service -f
 ```
