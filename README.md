@@ -57,8 +57,12 @@ RestartSec=5
 User=root
 StandardOutput=inherit
 StandardError=inherit
+```
 
-[Install]
-# Der Dienst soll im normalen Mehrbenutzermodus starten
-WantedBy=multi-user.target
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable openwb-dimmControllKit.service
+sudo systemctl start openwb-dimmControllKit.service
+sudo systemctl status openwb-dimmControllKit.service
+journalctl -u openwb-dimmControllKit.service -f
 ```
